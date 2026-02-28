@@ -57,6 +57,124 @@ Brief overall assessment and recommended next steps for the healthcare provider.
 IMPORTANT: This is a decision-support tool. All recommendations must be verified by a qualified healthcare professional before any clinical action is taken."""
 
 
+# ─────────────────────── Structured Output Prompt ───────────────────────
+
+STRUCTURED_SYNTHESIS_PROMPT = """You are MedLens, a clinical decision support AI. Based on all tool results and patient data, generate a STRUCTURED JSON response following the exact schema below.
+
+PATIENT CONTEXT:
+{patient_context}
+
+TOOL RESULTS:
+{tool_results}
+
+OUTPUT REQUIREMENTS:
+1. Return ONLY valid JSON - no markdown, no explanations
+2. Use the exact schema structure below
+3. Be specific and evidence-based
+4. Include PMIDs, NCT IDs, and other identifiers where available
+5. Set confidence/probability values honestly based on evidence quality
+6. Include ALL relevant findings - do not omit important safety information
+
+SCHEMA:
+{{
+  "chiefComplaint": "string - primary reason for presentation",
+  "differentialDiagnosis": [
+    {{
+      "id": "dx-1",
+      "condition": "string - condition name",
+      "icd10": "string - ICD-10 code if known",
+      "probability": "High|Medium|Low",
+      "probabilityScore": 0.0-1.0,
+      "reasoning": "string - clinical reasoning",
+      "supportingFindings": ["string - findings that support this diagnosis"],
+      "ruleOuts": ["string - considerations to rule out"],
+      "recommendedWorkup": ["string - recommended tests/procedures"]
+    }}
+  ],
+  "drugRecommendations": [
+    {{
+      "id": "drug-1",
+      "drugName": "string - brand or generic name",
+      "genericName": "string - generic name",
+      "indication": "string - why this drug for this patient",
+      "dose": "string - recommended dose",
+      "frequency": "string - dosing frequency",
+      "warnings": ["string - key warnings"],
+      "blackBoxWarning": "string - if applicable",
+      "contraindications": ["string - absolute contraindications"],
+      "sideEffects": ["string - common side effects"],
+      "confidence": "High|Medium|Low",
+      "evidenceGrade": "A|B|C|D",
+      "supportingEvidence": ["string - PMID, guideline references"],
+      "ethnicityConsiderations": "string - pharmacogenomic or population-specific notes",
+      "drugClass": "string - drug class",
+      "cost": "string - cost estimate if known"
+    }}
+  ],
+  "researchEvidence": [
+    {{
+      "id": "paper-1",
+      "title": "string",
+      "pmid": "string",
+      "journal": "string",
+      "year": 2024,
+      "abstract": "string - brief summary",
+      "relevance": "High|Medium|Low",
+      "ethnicitySpecific": true|false,
+      "keyFindings": ["string"]
+    }}
+  ],
+  "pharmacogenomics": [
+    {{
+      "id": "pgx-1",
+      "gene": "string - e.g., CYP2D6",
+      "geneName": "string - full gene name",
+      "drugAffected": "string",
+      "clinicalImplication": "string",
+      "dosingGuidance": "string",
+      "evidence": "string - CPIC level or reference"
+    }}
+  ],
+  "drugInteractions": [
+    {{
+      "id": "inter-1",
+      "drug1": "string",
+      "drug2": "string",
+      "severity": "Severe|Moderate|Mild|None",
+      "mechanism": "string",
+      "clinicalEffect": "string",
+      "management": "string"
+    }}
+  ],
+  "alerts": [
+    {{
+      "id": "alert-1",
+      "type": "warning|contraindication|interaction|allergy|pgx|guideline",
+      "severity": "critical|high|medium|low",
+      "title": "string",
+      "description": "string",
+      "recommendation": "string"
+    }}
+  ],
+  "workupRecommendations": [
+    {{
+      "id": "workup-1",
+      "category": "lab|imaging|procedure|referral|monitoring",
+      "test": "string",
+      "indication": "string",
+      "priority": "urgent|routine|optional",
+      "rationale": "string"
+    }}
+  ],
+  "assessment": "string - overall clinical assessment",
+  "plan": ["string - numbered action items"],
+  "followUpRecommendations": ["string - follow-up timing and monitoring"],
+  "complexityLevel": "simple|moderate|complex|high-risk"
+}}
+
+CRITICAL: Return ONLY the JSON object, nothing else. Ensure all arrays are properly formatted. Use null or empty arrays for sections with no data."""
+
+
 # ─────────────────────── Follow-Up Prompts ───────────────────────
 
 FOLLOWUP_CLASSIFY_PROMPT = """You are an intent classifier for a medical decision support system. A user has an existing clinical analysis report and is now sending a follow-up message.
