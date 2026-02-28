@@ -8,8 +8,7 @@ import {
   Palette,
   Activity,
   FileText,
-  X,
-  AlertTriangle
+  X
 } from 'lucide-react';
 import { PatientSummaryStrip } from './PatientSummaryStrip';
 import { ClinicalNoteEditor } from './ClinicalNoteEditor';
@@ -17,6 +16,9 @@ import { AnalysisTimeline } from './AnalysisTimeline';
 import { EvidencePanel } from './EvidencePanel';
 import { DifferentialDiagnosisTable } from './DifferentialDiagnosisTable';
 import { DrugCard } from './DrugCard';
+import { DrugInteractionMatrix } from './DrugInteractionMatrix';
+import { PharmacogenomicsDashboard } from './PharmacogenomicsDashboard';
+import { ClinicalAlertsPanel } from './ClinicalAlertsPanel';
 import type { PatientSummary, StructuredClinicalReport } from '../../types/clinical';
 
 interface ClinicalWorkbenchProps {
@@ -260,6 +262,23 @@ export const ClinicalWorkbench: React.FC<ClinicalWorkbenchProps> = ({
                     </div>
                   )}
 
+                  {/* Drug Interaction Matrix */}
+                  {report.drugInteractions.length > 0 && report.drugRecommendations.length > 0 && (
+                    <div>
+                      <DrugInteractionMatrix 
+                        interactions={report.drugInteractions}
+                        medications={report.drugRecommendations.map((d: any) => d.drugName)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Pharmacogenomics Dashboard */}
+                  {report.pharmacogenomics.length > 0 && (
+                    <div>
+                      <PharmacogenomicsDashboard findings={report.pharmacogenomics} />
+                    </div>
+                  )}
+
                   {/* Assessment & Plan */}
                   {(report.assessment || report.plan.length > 0) && (
                     <div className="p-5 rounded-lg border" style={{
@@ -297,38 +316,10 @@ export const ClinicalWorkbench: React.FC<ClinicalWorkbenchProps> = ({
                     </div>
                   )}
 
-                  {/* Alerts */}
+                  {/* Clinical Alerts Panel */}
                   {report.alerts.length > 0 && (
-                    <div className="space-y-2">
-                      {report.alerts.map((alert: any) => (
-                        <div key={alert.id} className={`p-4 rounded-lg border flex items-start gap-3 ${
-                          alert.severity === 'critical' ? 'bg-red-900/20 border-red-800/30' :
-                          alert.severity === 'high' ? 'bg-orange-900/20 border-orange-800/30' :
-                          'bg-yellow-900/20 border-yellow-800/30'
-                        }`}>
-                          <AlertTriangle size={18} className={`shrink-0 mt-0.5 ${
-                            alert.severity === 'critical' ? 'text-red-400' :
-                            alert.severity === 'high' ? 'text-orange-400' :
-                            'text-yellow-400'
-                          }`} />
-                          <div>
-                            <h4 className={`text-sm font-semibold ${
-                              alert.severity === 'critical' ? 'text-red-300' :
-                              alert.severity === 'high' ? 'text-orange-300' :
-                              'text-yellow-300'
-                            }`}>
-                              {alert.title}
-                            </h4>
-                            <p className={`text-sm mt-1 ${
-                              alert.severity === 'critical' ? 'text-red-200' :
-                              alert.severity === 'high' ? 'text-orange-200' :
-                              'text-yellow-200'
-                            }`}>
-                              {alert.description}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                    <div>
+                      <ClinicalAlertsPanel alerts={report.alerts} />
                     </div>
                   )}
                 </div>
