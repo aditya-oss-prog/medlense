@@ -122,14 +122,16 @@ def list_conversations():
         title = (first_msg[:60] + "…") if len(first_msg) > 60 else first_msg
         if not title:
             title = "Untitled conversation"
-        conversations.append({
-            "id": row["id"],
-            "title": title,
-            "created_at": row["created_at"],
-            "last_activity": row["last_activity"] or row["created_at"],
-            "message_count": row["message_count"] or 0,
-            "version_count": row["version_count"] or 0,
-        })
+        conversations.append(
+            {
+                "id": row["id"],
+                "title": title,
+                "created_at": row["created_at"],
+                "last_activity": row["last_activity"] or row["created_at"],
+                "message_count": row["message_count"] or 0,
+                "version_count": row["version_count"] or 0,
+            }
+        )
 
     return {"conversations": conversations}
 
@@ -190,13 +192,15 @@ def get_conversation_messages(conversation_id: str):
 
     messages = []
     for row in rows:
-        messages.append({
-            "id": row["id"],
-            "role": row["role"],
-            "content": row["content"],
-            "intent": row["intent"],
-            "created_at": row["created_at"],
-        })
+        messages.append(
+            {
+                "id": row["id"],
+                "role": row["role"],
+                "content": row["content"],
+                "intent": row["intent"],
+                "created_at": row["created_at"],
+            }
+        )
 
     return {"messages": messages}
 
@@ -244,7 +248,9 @@ def delete_conversation(conversation_id: str):
     return {"message": "Conversation deleted"}
 
 
-def _save_chat_message(conversation_id: str, role: str, content: str, intent: str = None):
+def _save_chat_message(
+    conversation_id: str, role: str, content: str, intent: str = None
+):
     """Save a chat message to the database."""
     with get_db_connection() as conn:
         conn.execute(
@@ -266,7 +272,7 @@ def _get_chat_history(conversation_id: str, limit: int = 10) -> list[dict]:
             (conversation_id, limit),
         )
         rows = cursor.fetchall()
-    
+
     # Reverse to get chronological order
     return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
 
@@ -284,7 +290,7 @@ def _get_latest_report(conversation_id: str) -> tuple[str, dict] | None:
             (conversation_id,),
         )
         row = cursor.fetchone()
-    
+
     if row:
         return row["report_content"], json.loads(row["patient_data_json"])
     return None
@@ -352,14 +358,19 @@ def analyze_case(req: AnalyzeRequest):
 
                 # Save assistant response to chat history
                 _save_chat_message(
-                    conversation_id, "assistant",
+                    conversation_id,
+                    "assistant",
                     result["chat_response"],
                     intent=intent,
                 )
 
                 if response_type == "report_update" and result.get("updated_report"):
                     # Save new version
-                    patient_dict = result.get("updated_patient") or current_patient_data or patient.model_dump()
+                    patient_dict = (
+                        result.get("updated_patient")
+                        or current_patient_data
+                        or patient.model_dump()
+                    )
 
                     with get_db_connection() as conn:
                         cursor = conn.execute(
@@ -385,39 +396,48 @@ def analyze_case(req: AnalyzeRequest):
                         )
                         conn.commit()
 
-                    q.put({
-                        "type": "result",
-                        "response_type": "report_update",
-                        "chat_response": result["chat_response"],
-                        "synthesis": result["updated_report"],
-                        "patient": patient_dict,
-                        "conversation_id": conversation_id,
-                        "version_number": version_number,
-                        "intent": intent,
-                    })
+                    q.put(
+                        {
+                            "type": "result",
+                            "response_type": "report_update",
+                            "chat_response": result["chat_response"],
+                            "synthesis": result["updated_report"],
+                            "patient": patient_dict,
+                            "conversation_id": conversation_id,
+                            "version_number": version_number,
+                            "intent": intent,
+                        }
+                    )
                 else:
                     # Chat-only response — no new version
-                    q.put({
-                        "type": "result",
-                        "response_type": "chat_only",
-                        "chat_response": result["chat_response"],
-                        "synthesis": None,
-                        "patient": current_patient_data or patient.model_dump(),
-                        "conversation_id": conversation_id,
-                        "version_number": None,
-                        "intent": intent,
-                    })
+                    q.put(
+                        {
+                            "type": "result",
+                            "response_type": "chat_only",
+                            "chat_response": result["chat_response"],
+                            "synthesis": None,
+                            "patient": current_patient_data or patient.model_dump(),
+                            "conversation_id": conversation_id,
+                            "version_number": None,
+                            "intent": intent,
+                        }
+                    )
 
             else:
                 # ═══════════════════════════════════════
                 # INITIAL ANALYSIS FLOW (first message)
                 # ═══════════════════════════════════════
-                q.put({"type": "status", "message": "Extracting patient demographics..."})
+                q.put(
+                    {"type": "status", "message": "Extracting patient demographics..."}
+                )
 
                 extracted_patient = extract_patient_profile(req.prompt.strip())
 
                 if req.patient_data:
-                    merged_patient = {**extracted_patient.model_dump(), **req.patient_data}
+                    merged_patient = {
+                        **extracted_patient.model_dump(),
+                        **req.patient_data,
+                    }
                     patient = PatientProfile(**merged_patient)
                 else:
                     patient = extracted_patient
@@ -467,7 +487,8 @@ def analyze_case(req: AnalyzeRequest):
 
                 # Save assistant response to chat
                 _save_chat_message(
-                    conversation_id, "assistant",
+                    conversation_id,
+                    "assistant",
                     "I've completed the initial clinical analysis. See the report.",
                     intent="initial_analysis",
                 )
@@ -477,7 +498,8 @@ def analyze_case(req: AnalyzeRequest):
                         "type": "result",
                         "response_type": "report_update",
                         "chat_response": "I've completed the clinical analysis. See the report on the right.",
-                        "synthesis": result.get("synthesis", "No synthesis generated."),
+                        "synthesis": result.get("structured_report")
+                        or result.get("synthesis", "No synthesis generated."),
                         "patient": patient_dict,
                         "conversation_id": conversation_id,
                         "version_number": version_number,

@@ -114,27 +114,50 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
-// Convert legacy markdown report to structured report (temporary bridge)
-function convertLegacyReport(_markdown: string, _patientData: PatientData): StructuredClinicalReport {
-  // Temporary implementation - will be replaced with proper LLM structured output
+// Parse structured JSON report from LLM
+function parseStructuredReport(data: any, patientData: PatientData): StructuredClinicalReport {
+  if (!data || typeof data !== 'object') {
+    // Fallback for markdown responses
+    return {
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      chiefComplaint: patientData?.age ? `Patient presentation` : 'Clinical analysis',
+      differentialDiagnosis: [],
+      drugRecommendations: [],
+      researchEvidence: [],
+      clinicalTrials: [],
+      drugInteractions: [],
+      pharmacogenomics: [],
+      alerts: [],
+      workupRecommendations: [],
+      guidelineReferences: [],
+      assessment: data || 'Clinical analysis generated.',
+      plan: ['Review clinical findings'],
+      followUpRecommendations: [],
+      complexityLevel: 'moderate'
+    };
+  }
+  
+  // Use structured JSON directly
   return {
     id: generateId(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    chiefComplaint: '',
-    differentialDiagnosis: [],
-    drugRecommendations: [],
-    researchEvidence: [],
-    clinicalTrials: [],
-    drugInteractions: [],
-    pharmacogenomics: [],
-    alerts: [],
-    workupRecommendations: [],
-    guidelineReferences: [],
-    assessment: 'Clinical analysis generated. Structured output pending LLM update.',
-    plan: ['Review clinical findings', 'Consider differential diagnoses', 'Evaluate treatment options'],
-    followUpRecommendations: [],
-    complexityLevel: 'moderate'
+    chiefComplaint: data.chiefComplaint || '',
+    differentialDiagnosis: data.differentialDiagnosis || [],
+    drugRecommendations: data.drugRecommendations || [],
+    researchEvidence: data.researchEvidence || [],
+    clinicalTrials: data.clinicalTrials || [],
+    drugInteractions: data.drugInteractions || [],
+    pharmacogenomics: data.pharmacogenomics || [],
+    alerts: data.alerts || [],
+    workupRecommendations: data.workupRecommendations || [],
+    guidelineReferences: data.guidelineReferences || [],
+    assessment: data.assessment || '',
+    plan: data.plan || [],
+    followUpRecommendations: data.followUpRecommendations || [],
+    complexityLevel: data.complexityLevel || 'moderate'
   };
 }
 
@@ -224,9 +247,16 @@ export default function App() {
         const versionData = await versionRes.json();
         
         if (versionData.report) {
-          const structuredReport = convertLegacyReport(versionData.report, versionData.patient_data || {});
-          setReport(structuredReport);
-          setPatient(convertToPatientSummary(versionData.patient_data || {}));
+          try {
+            const reportData = typeof versionData.report === 'string' ? JSON.parse(versionData.report) : versionData.report;
+            const structuredReport = parseStructuredReport(reportData, versionData.patient_data || {});
+            setReport(structuredReport);
+            setPatient(convertToPatientSummary(versionData.patient_data || {}));
+          } catch (e) {
+            const structuredReport = parseStructuredReport(versionData.report, versionData.patient_data || {});
+            setReport(structuredReport);
+            setPatient(convertToPatientSummary(versionData.patient_data || {}));
+          }
         }
       }
     } catch (err) {
@@ -321,7 +351,7 @@ export default function App() {
               } else if (data.type === 'result') {
                 // Process result
                 if (data.synthesis) {
-                  const structuredReport = convertLegacyReport(data.synthesis, data.patient || {});
+                  const structuredReport = parseStructuredReport(data.synthesis, data.patient || {});
                   setReport(structuredReport);
                   setPatient(convertToPatientSummary(data.patient || {}));
                 }
