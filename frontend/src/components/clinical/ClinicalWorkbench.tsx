@@ -19,6 +19,9 @@ import { DrugCard } from './DrugCard';
 import { DrugInteractionMatrix } from './DrugInteractionMatrix';
 import { PharmacogenomicsDashboard } from './PharmacogenomicsDashboard';
 import { ClinicalAlertsPanel } from './ClinicalAlertsPanel';
+import { EvidenceBubbleChart } from './EvidenceBubbleChart';
+import { RiskStratificationGauge } from './RiskStratificationGauge';
+import { DrugEfficacyComparison } from './DrugEfficacyComparison';
 import type { PatientSummary, StructuredClinicalReport } from '../../types/clinical';
 
 interface ClinicalWorkbenchProps {
@@ -232,16 +235,19 @@ export const ClinicalWorkbench: React.FC<ClinicalWorkbenchProps> = ({
                       <div className="flex items-center gap-2">
                         <span className="px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide" style={{
                           backgroundColor: report.complexityLevel === 'high-risk' ? 'rgba(239,68,68,0.15)' :
-                                         report.complexityLevel === 'complex' ? 'rgba(245,158,11,0.15)' :
-                                         'rgba(34,197,94,0.15)',
+                                          report.complexityLevel === 'complex' ? 'rgba(245,158,11,0.15)' :
+                                          'rgba(34,197,94,0.15)',
                           color: report.complexityLevel === 'high-risk' ? '#ef4444' :
-                                 report.complexityLevel === 'complex' ? '#f59e0b' : '#22c55e'
+                                  report.complexityLevel === 'complex' ? '#f59e0b' : '#22c55e'
                         }}>
                           {report.complexityLevel || 'Standard'} Complexity
                         </span>
                       </div>
                     </div>
                   </div>
+
+                  {/* Risk Stratification Gauge */}
+                  <RiskStratificationGauge report={report} />
 
                   {/* Differential Diagnosis */}
                   {report.differentialDiagnosis.length > 0 && (
@@ -276,6 +282,20 @@ export const ClinicalWorkbench: React.FC<ClinicalWorkbenchProps> = ({
                   {report.pharmacogenomics.length > 0 && (
                     <div>
                       <PharmacogenomicsDashboard findings={report.pharmacogenomics} />
+                    </div>
+                  )}
+
+                  {/* Drug Efficacy Comparison */}
+                  {report.drugRecommendations.length > 1 && (
+                    <div>
+                      <DrugEfficacyComparison drugs={report.drugRecommendations} />
+                    </div>
+                  )}
+
+                  {/* Evidence Bubble Chart */}
+                  {report.researchEvidence.length > 0 && (
+                    <div>
+                      <EvidenceBubbleChart papers={report.researchEvidence} />
                     </div>
                   )}
 
