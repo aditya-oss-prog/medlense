@@ -2,7 +2,11 @@
 
 import json
 from agent.llm_client import chat_completion
-from agent.prompts import SYSTEM_PROMPT, SYNTHESIS_PROMPT
+from agent.prompts import (
+    SYSTEM_PROMPT, SYNTHESIS_PROMPT,
+    FOLLOWUP_CLASSIFY_PROMPT, FOLLOWUP_CHAT_PROMPT,
+    FOLLOWUP_REPORT_UPDATE_PROMPT,
+)
 from utils.helpers import format_patient_context, truncate_to_tokens
 from models.schemas import PatientProfile, ToolCall
 
@@ -225,3 +229,313 @@ Text: {text}
         allergies=str(parsed.get("allergies", "Not specified")),
         current_medications=str(parsed.get("current_medications", "Not specified")),
     )
+
+
+# ─────────────────────── Follow-Up Handling ───────────────────────
+
+def classify_intent(user_message: str, current_report: str, patient_context: str) -> dict:
+    """Classify the intent of a follow-up message.
+    
+    Returns:
+        Dict with 'intent' (str) and 'reasoning' (str).
+        Intent is one of: chat, update_report, new_patient
+    """
+    messages = [
+        {"role": "system", "content": FOLLOWUP_CLASSIFY_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                f"Current patient: {patient_context}\n\n"
+                f"Current report exists: Yes (length: {len(current_report)} chars)\n\n"
+                f"User's follow-up message: {user_message}"
+            ),
+        },
+    ]
+    
+    response = chat_completion(
+        messages=messages,
+        temperature=0.0,
+        max_tokens=200,
+    )
+    
+    from utils.helpers import safe_json_parse
+    content = response.get("content", "")
+    parsed = safe_json_parse(content)
+    
+    if isinstance(parsed, dict) and "intent" in parsed:
+        intent = parsed["intent"]
+        valid_intents = ["chat", "update_report", "new_patient"]
+        if intent in valid_intents:
+            return parsed
+    
+    # Fallback: default to chat
+    return {"intent": "chat", "reasoning": "Could not classify intent, defaulting to chat"}
+
+
+def run_followup(
+    user_message: str,
+    current_report: str,
+    patient: PatientProfile,
+    chat_history: list[dict] = None,
+    status_callback=None,
+) -> dict:
+    """Handle a follow-up message in an existing conversation.
+    
+    Uses 3 simplified intents:
+    - chat: answer in conversation (default), never modify report
+    - update_report: modify the report document → new version
+    - new_patient: full pipeline from scratch
+    """
+    tool_trace = []
+    
+    def update_status(stage: str, message: str):
+        if status_callback:
+            status_callback(stage, message)
+    
+    patient_context = format_patient_context(patient)
+    
+    # Step 1: Classify intent
+    update_status("classifying", "Understanding your request...")
+    intent_result = classify_intent(user_message, current_report, patient_context)
+    intent = intent_result["intent"]
+    update_status("classified", f"Intent: {intent}")
+    
+    # Step 2: Handle based on intent
+    if intent == "new_patient":
+        update_status("starting", "New patient detected — running full analysis...")
+        new_patient = extract_patient_profile(user_message)
+        result = run_agent(new_patient, status_callback=status_callback)
+        return {
+            "response_type": "report_update",
+            "chat_response": "I've analyzed the new patient case. See the updated report.",
+            "updated_report": result.get("synthesis", ""),
+            "updated_patient": new_patient.model_dump(),
+            "intent": intent,
+            "tool_trace": result.get("tool_trace", []),
+        }
+    
+    elif intent == "update_report":
+        return _handle_report_update(user_message, current_report, patient, patient_context, tool_trace, update_status)
+    
+    else:
+        # Default: chat (handles questions, research, info requests, everything conversational)
+        return _handle_chat(user_message, current_report, patient, patient_context, chat_history, tool_trace, update_status)
+
+
+def _handle_chat(user_message, current_report, patient, patient_context, chat_history, tool_trace, update_status):
+    """Handle any conversational follow-up — answer in chat, use tools if needed, NEVER modify report."""
+    update_status("thinking", "Processing your message...")
+    
+    report_summary = truncate_to_tokens(current_report, 2000)
+    
+    system_prompt = FOLLOWUP_CHAT_PROMPT.format(
+        patient_context=patient_context,
+        report_summary=report_summary,
+    )
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+    ]
+    
+    # Add recent chat history for context (last 6 messages)
+    if chat_history:
+        for msg in chat_history[-6:]:
+            messages.append(msg)
+    
+    messages.append({"role": "user", "content": user_message})
+    
+    # Allow tool use for lookups
+    for round_num in range(5):
+        response = chat_completion(
+            messages=messages,
+            tools=ALL_TOOLS,
+            temperature=0.2,
+            max_tokens=2048,
+        )
+        
+        tool_calls = response.get("tool_calls", [])
+        content = response.get("content", "")
+        
+        if not tool_calls:
+            break
+        
+        assistant_msg = {"role": "assistant", "content": content or None}
+        assistant_msg["tool_calls"] = [
+            {"id": tc["id"], "type": "function", "function": tc["function"]}
+            for tc in tool_calls
+        ]
+        messages.append(assistant_msg)
+        
+        for tc in tool_calls:
+            func_name = tc["function"]["name"]
+            try:
+                args = json.loads(tc["function"]["arguments"])
+            except json.JSONDecodeError:
+                args = {}
+            
+            update_status("tool_call", f"Looking up: {func_name}")
+            result = execute_tool(func_name, args)
+            tool_trace.append(ToolCall(tool_name=func_name, arguments=args, result=truncate_to_tokens(result, 500)))
+            messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+    
+    # If the loop exhausted and the last response was a tool call, force a final summary response
+    if tool_calls:
+        update_status("thinking", "Summarizing findings...")
+        response = chat_completion(
+            messages=messages,
+            tools=None,
+            temperature=0.2,
+            max_tokens=2048,
+        )
+        content = response.get("content", "")
+
+    chat_response = content.strip() if content else "I couldn't generate a response. Please try rephrasing."
+    
+    update_status("complete", "Done!")
+    
+    return {
+        "response_type": "chat_only",
+        "chat_response": chat_response,
+        "updated_report": None,
+        "updated_patient": None,
+        "intent": "chat",
+        "tool_trace": tool_trace,
+    }
+
+
+def _handle_report_update(user_message, current_report, patient, patient_context, tool_trace, update_status):
+    """Handle explicit report modification requests — edit, add to, or remove from the document."""
+    update_status("updating", "Modifying the report...")
+    
+    system_prompt = FOLLOWUP_REPORT_UPDATE_PROMPT.format(
+        patient_context=patient_context,
+        current_report=current_report,
+    )
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_message},
+    ]
+    
+    # Allow tool calls for research if adding new info
+    for round_num in range(5):
+        update_status("thinking", f"Processing update (step {round_num + 1})...")
+        
+        response = chat_completion(
+            messages=messages,
+            tools=ALL_TOOLS,
+            temperature=0.1,
+            max_tokens=4096,
+        )
+        
+        tool_calls = response.get("tool_calls", [])
+        content = response.get("content", "")
+        
+        if not tool_calls:
+            break
+        
+        assistant_msg = {"role": "assistant", "content": content or None}
+        assistant_msg["tool_calls"] = [
+            {"id": tc["id"], "type": "function", "function": tc["function"]}
+            for tc in tool_calls
+        ]
+        messages.append(assistant_msg)
+        
+        for tc in tool_calls:
+            func_name = tc["function"]["name"]
+            try:
+                args = json.loads(tc["function"]["arguments"])
+            except json.JSONDecodeError:
+                args = {}
+            
+            update_status("tool_call", f"Researching: {func_name}")
+            result = execute_tool(func_name, args)
+            tool_trace.append(ToolCall(tool_name=func_name, arguments=args, result=truncate_to_tokens(result, 500)))
+            messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+    
+    if tool_calls:
+        update_status("thinking", "Finalizing report update...")
+        response = chat_completion(
+            messages=messages,
+            tools=None,
+            temperature=0.1,
+            max_tokens=4096,
+        )
+
+    updated_report = response.get("content", "")
+    
+    # Integrity check: if updated report is less than 40% of original, something went wrong
+    if len(updated_report) < len(current_report) * 0.4:
+        update_status("warning", "Report update seems incomplete, falling back to chat response")
+        return {
+            "response_type": "chat_only",
+            "chat_response": updated_report or "I wasn't able to properly update the report. Could you rephrase your request?",
+            "updated_report": None,
+            "updated_patient": None,
+            "intent": "update_report",
+            "tool_trace": tool_trace,
+        }
+    
+    # Check if patient data needs updating
+    updated_patient = _check_patient_update(user_message, patient)
+    
+    update_status("complete", "Report updated!")
+    
+    return {
+        "response_type": "report_update",
+        "chat_response": "I've updated the report based on your request.",
+        "updated_report": updated_report,
+        "updated_patient": updated_patient,
+        "intent": "update_report",
+        "tool_trace": tool_trace,
+    }
+
+
+def _check_patient_update(user_message: str, patient: PatientProfile) -> dict | None:
+    """Check if the follow-up message implies changes to patient demographics."""
+    msg_lower = user_message.lower()
+    
+    # Quick heuristic check — only call LLM if message likely contains patient data changes
+    change_keywords = ["age", "year old", "male", "female", "ethnicity", "country", 
+                       "allerg", "medication", "taking", "prescribed", "weight"]
+    
+    if not any(kw in msg_lower for kw in change_keywords):
+        return None
+    
+    prompt = f"""The user sent this message about an existing patient:
+"{user_message}"
+
+Current patient data:
+- Age: {patient.age}
+- Sex: {patient.sex}
+- Ethnicity: {patient.ethnicity}
+- Country: {patient.country}
+- Allergies: {patient.allergies}
+- Current Medications: {patient.current_medications}
+- Symptoms: {patient.symptoms}
+
+Does this message change any patient demographics or medication info? 
+If YES, return a JSON with ONLY the changed fields.
+If NO, return {{"no_changes": true}}
+
+Return ONLY valid JSON, nothing else."""
+
+    response = chat_completion(
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+        max_tokens=300,
+    )
+    
+    from utils.helpers import safe_json_parse
+    parsed = safe_json_parse(response.get("content", "{}"))
+    
+    if not isinstance(parsed, dict) or parsed.get("no_changes"):
+        return None
+    
+    # Merge changes into existing patient data
+    current = patient.model_dump()
+    for key, value in parsed.items():
+        if key in current and key != "symptoms":
+            current[key] = value
+    
+    return current
