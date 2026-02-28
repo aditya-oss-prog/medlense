@@ -46,6 +46,71 @@ body {
   background-color: var(--accent-light, rgba(82, 121, 111, 0.2));
 }
 
+/* ── Dark Mode Markdown Fixes ───────────────────────────────────────────── */
+
+.theme-midnight .prose {
+  color: var(--text-secondary) !important;
+}
+
+.theme-midnight .prose h1,
+.theme-midnight .prose h2,
+.theme-midnight .prose h3,
+.theme-midnight .prose h4,
+.theme-midnight .prose h5,
+.theme-midnight .prose h6 {
+  color: var(--text-primary) !important;
+}
+
+.theme-midnight .prose a {
+  color: var(--accent) !important;
+  text-decoration-color: var(--accent) !important;
+}
+
+.theme-midnight .prose a:hover {
+  color: var(--accent-hover) !important;
+}
+
+.theme-midnight .prose strong,
+.theme-midnight .prose b {
+  color: var(--text-primary) !important;
+}
+
+.theme-midnight .prose code {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+.theme-midnight .prose pre {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+.theme-midnight .prose blockquote {
+  border-left-color: var(--border-subtle) !important;
+  color: var(--text-secondary) !important;
+}
+
+.theme-midnight .prose hr {
+  border-color: var(--border-subtle) !important;
+}
+
+.theme-midnight .prose table,
+.theme-midnight .prose th,
+.theme-midnight .prose td {
+  border-color: var(--border-subtle) !important;
+}
+
+.theme-midnight .prose th {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}
+
+.theme-midnight .prose li::marker {
+  color: var(--text-secondary) !important;
+}
+
 /* ── Focus ring ────────────────────────────────────────────────────────────── */
 
 :focus-visible {

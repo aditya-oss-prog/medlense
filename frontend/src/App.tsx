@@ -212,6 +212,12 @@ function App() {
   // Theme
   const [currentTheme, setCurrentTheme] = useState('sage');
 
+  // ── Update body class for theme ─────────────────────────────────────────
+  useEffect(() => {
+    document.body.classList.remove('theme-stone', 'theme-clinical', 'theme-sage', 'theme-midnight');
+    document.body.classList.add(`theme-${currentTheme}`);
+  }, [currentTheme]);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
