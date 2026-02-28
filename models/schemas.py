@@ -1,7 +1,7 @@
 """Pydantic models for MedLens data structures."""
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 
 class PatientProfile(BaseModel):
@@ -92,3 +92,48 @@ class DocumentVersion(BaseModel):
     version_number: int
     user_message: str
     created_at: str
+
+
+class StructuredClinicalReport(BaseModel):
+    """Structured clinical report for storage and exchange."""
+
+    id: str
+    patient_id: Optional[str] = None
+    created_at: str
+    updated_at: str
+    chief_complaint: str
+    differential_diagnosis: List[Dict[str, Any]] = []
+    drug_recommendations: List[Dict[str, Any]] = []
+    research_evidence: List[Dict[str, Any]] = []
+    clinical_trials: List[Dict[str, Any]] = []
+    drug_interactions: List[Dict[str, Any]] = []
+    pharmacogenomics: List[Dict[str, Any]] = []
+    alerts: List[Dict[str, Any]] = []
+    workup_recommendations: List[Dict[str, Any]] = []
+    guideline_references: List[Dict[str, Any]] = []
+    assessment: str
+    plan: List[str] = []
+    follow_up_recommendations: List[str] = []
+    evidence_grade: Optional[str] = None
+    confidence_score: Optional[float] = None
+    complexity_level: Optional[str] = None
+
+
+class AnalyzeRequest(BaseModel):
+    """Request for clinical analysis."""
+
+    prompt: str
+    conversation_id: Optional[str] = None
+    patient_data: Optional[Dict[str, Any]] = None
+    current_report: Optional[str] = None
+    is_followup: bool = False
+
+
+class StructuredReportResponse(BaseModel):
+    """Response containing structured clinical report."""
+
+    report: StructuredClinicalReport
+    conversation_id: str
+    version_number: int
+    fhir_bundle: Optional[Dict[str, Any]] = None
+    pdf_content: Optional[str] = None

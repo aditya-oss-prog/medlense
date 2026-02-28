@@ -13,7 +13,11 @@ from typing import Optional
 import uvicorn
 
 from agent.core import run_agent, run_followup, extract_patient_profile
-from models.schemas import PatientProfile
+from models.schemas import (
+    PatientProfile,
+    StructuredClinicalReport,
+    StructuredReportResponse,
+)
 
 app = FastAPI(title="MedLens API")
 
@@ -249,7 +253,7 @@ def delete_conversation(conversation_id: str):
 
 
 def _save_chat_message(
-    conversation_id: str, role: str, content: str, intent: str = None
+    conversation_id: str, role: str, content: str, intent: Optional[str] = None
 ):
     """Save a chat message to the database."""
     with get_db_connection() as conn:
@@ -521,6 +525,166 @@ def analyze_case(req: AnalyzeRequest):
             yield f"data: {json.dumps(item)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/reports/{conversation_id}/latest")
+def get_latest_report(conversation_id: str):
+    """Get latest structured clinical report for a conversation."""
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            """
+            SELECT report_content, patient_data_json, version_number, created_at
+            FROM document_versions
+            WHERE conversation_id = ?
+            ORDER BY version_number DESC
+            LIMIT 1
+            """,
+            (conversation_id,),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="No report found")
+
+        try:
+            report_data = json.loads(row[0]) if row[0] else {}
+        except json.JSONDecodeError:
+            report_data = {}
+
+        patient_data = json.loads(row[1]) if row[1] else {}
+
+        return {
+            "report": report_data,
+            "patient_data": patient_data,
+            "version_number": row[2],
+            "created_at": row[3],
+        }
+
+
+@app.get("/api/reports/{conversation_id}/fhir")
+def get_fhir_bundle(conversation_id: str):
+    """Get FHIR Bundle for a clinical report."""
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            """
+            SELECT report_content
+            FROM document_versions
+            WHERE conversation_id = ?
+            ORDER BY version_number DESC
+            LIMIT 1
+            """,
+            (conversation_id,),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="No report found")
+
+        try:
+            report_data = json.loads(row[0]) if row[0] else {}
+        except json.JSONDecodeError:
+            report_data = {}
+
+        # Generate FHIR bundle (simplified)
+        bundle = {
+            "resourceType": "Bundle",
+            "type": "document",
+            "id": conversation_id,
+            "entry": [],
+        }
+
+        # Add conditions
+        for dx in report_data.get("differentialDiagnosis", []):
+            bundle["entry"].append(
+                {
+                    "resource": {
+                        "resourceType": "Condition",
+                        "code": {
+                            "coding": [
+                                {
+                                    "system": "http://hl7.org/fhir/sid/icd-10",
+                                    "code": dx.get("icd10", "unknown"),
+                                    "display": dx.get("condition", "Unknown"),
+                                }
+                            ]
+                        },
+                    }
+                }
+            )
+
+        # Add medication requests
+        for drug in report_data.get("drugRecommendations", []):
+            bundle["entry"].append(
+                {
+                    "resource": {
+                        "resourceType": "MedicationRequest",
+                        "medication": {
+                            "coding": [{"display": drug.get("drugName", "Unknown")}]
+                        },
+                    }
+                }
+            )
+
+        return bundle
+
+
+@app.get("/api/reports/{conversation_id}/pdf")
+def get_pdf_content(conversation_id: str):
+    """Get PDF-ready content for a clinical report."""
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            """
+            SELECT report_content
+            FROM document_versions
+            WHERE conversation_id = ?
+            ORDER BY version_number DESC
+            LIMIT 1
+            """,
+            (conversation_id,),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="No report found")
+
+        try:
+            report_data = json.loads(row[0]) if row[0] else {}
+        except json.JSONDecodeError:
+            report_data = {}
+
+        # Generate text content
+        lines = [
+            "CLINICAL ANALYSIS REPORT",
+            "========================",
+            "",
+            f"Report ID: {conversation_id}",
+            f"Chief Complaint: {report_data.get('chiefComplaint', 'N/A')}",
+            "",
+            "DIFFERENTIAL DIAGNOSIS",
+            "--------------------",
+        ]
+
+        for dx in report_data.get("differentialDiagnosis", []):
+            lines.append(
+                f"- {dx.get('condition', 'Unknown')} ({dx.get('probability', 'N/A')})"
+            )
+
+        lines.append("")
+        lines.append("DRUG RECOMMENDATIONS")
+        lines.append("--------------------")
+
+        for drug in report_data.get("drugRecommendations", []):
+            lines.append(f"- {drug.get('drugName', 'Unknown')}")
+
+        lines.append("")
+        lines.append("ASSESSMENT")
+        lines.append("----------")
+        lines.append(report_data.get("assessment", "N/A"))
+
+        lines.append("")
+        lines.append("========================")
+
+        return {"content": "\n".join(lines), "format": "text/plain"}
 
 
 if __name__ == "__main__":
