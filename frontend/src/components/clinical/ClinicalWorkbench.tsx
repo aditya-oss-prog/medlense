@@ -22,6 +22,8 @@ import { ClinicalAlertsPanel } from './ClinicalAlertsPanel';
 import { EvidenceBubbleChart } from './EvidenceBubbleChart';
 import { RiskStratificationGauge } from './RiskStratificationGauge';
 import { DrugEfficacyComparison } from './DrugEfficacyComparison';
+import { ExportPanel } from './ExportPanel';
+import { ClinicalPathwayTemplate } from './ClinicalPathwayTemplate';
 import type { PatientSummary, StructuredClinicalReport } from '../../types/clinical';
 
 interface ClinicalWorkbenchProps {
@@ -342,6 +344,17 @@ export const ClinicalWorkbench: React.FC<ClinicalWorkbenchProps> = ({
                       <ClinicalAlertsPanel alerts={report.alerts} />
                     </div>
                   )}
+
+                  {/* Clinical Pathway Template */}
+                  {(report.differentialDiagnosis.length > 0 || report.drugRecommendations.length > 0 || report.workupRecommendations.length > 0) && (
+                    <div>
+                      <ClinicalPathwayTemplate 
+                        diagnoses={report.differentialDiagnosis}
+                        drugs={report.drugRecommendations}
+                        workups={report.workupRecommendations}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -365,6 +378,13 @@ export const ClinicalWorkbench: React.FC<ClinicalWorkbenchProps> = ({
                   hasReport={!!report}
                 />
               </div>
+
+              {/* Export Panel */}
+              {report && (
+                <ExportPanel
+                  report={report}
+                />
+              )}
             </div>
           </div>
 
