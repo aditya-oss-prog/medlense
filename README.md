@@ -1,130 +1,78 @@
-# 🔬 MedLens — Ethnicity-Aware Clinical Decision Support System
+# 🔬 MedLens — Ethnicity-Aware Clinical Decision Support AI
 
-> **DevDash 2026 Hackathon Submission** | AI & Healthcare Track
+MedLens is an AI-powered clinical decision support tool that generates **ethnicity-aware, evidence-based medical reports** by orchestrating multiple biomedical data sources through an intelligent agent. It considers pharmacogenomic variations, population-specific drug responses, and cultural factors to provide more personalized clinical insights.
 
-MedLens is an LLM-powered clinical decision support system that analyzes patient symptoms, searches medical research databases, and provides **personalized drug recommendations** based on the patient's **ethnic background and country of origin**. It leverages pharmacogenomic data to account for population-specific drug metabolism variations.
-
-![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-red?logo=streamlit)
-![License](https://img.shields.io/badge/License-MIT-green)
+> ⚠️ **Disclaimer:** MedLens is for **educational and research purposes only** — it is not a substitute for professional medical advice, diagnosis, or treatment.
 
 ---
 
-## 🎯 Problem Statement
+## ✨ Features
 
-Drug response varies significantly across ethnic populations due to genetic differences in drug-metabolizing enzymes (pharmacogenomics). A medication that works well for one population may be ineffective or dangerous for another. Yet most clinical decision tools don't account for these differences.
-
-**MedLens bridges this gap** by combining LLM reasoning with real-time medical database queries and pharmacogenomic data to deliver ethnicity-aware clinical recommendations.
-
----
-
-## ✨ Key Features
-
-- **🧠 LLM-Powered Symptom Analysis** — Identifies potential conditions from natural language symptom descriptions
-- **📚 PubMed Research Search** — Queries NCBI for ethnicity-specific medical research papers
-- **💊 FDA Drug Lookup** — Searches OpenFDA for drug information, indications, and warnings
-- **🧪 Clinical Trials Search** — Finds relevant trials from ClinicalTrials.gov
-- **🧬 Pharmacogenomics Engine** — Curated database of population-specific drug metabolism data (PharmGKB/CPIC)
-- **⚠️ Drug Interaction Checker** — Verifies safety of drug combinations via FDA adverse events
-- **🔧 Agentic Tool Calling** — LLM autonomously decides which tools to call and in what order
-- **📊 Interactive Dashboard** — Clean Streamlit UI with live agent trace, exportable reports
+- **Ethnicity-Aware Analysis** — Considers pharmacogenomic variants (e.g., CYP2D6, CYP2C19) that vary by ethnic group, affecting drug metabolism and response
+- **Multi-Source Evidence Gathering** — Automatically queries PubMed, OpenFDA, ClinicalTrials.gov, PharmGKB, and drug interaction databases
+- **Conversational Follow-ups** — Ask follow-up questions, request edits, or add new information to refine reports
+- **Version History** — Every report revision is saved; browse and compare previous versions
+- **Conversation Management** — Create, load, and delete conversation sessions with full chat history
+- **4 Beautiful Themes** — Warm Stone, Clinical Teal, Therapeutic Sage, and Midnight (Dark)
+- **Resizable Panels** — Drag to resize the chat and report panels
+- **Streaming Responses** — Real-time status updates via Server-Sent Events (SSE)
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-Patient Input (Symptoms + Demographics)
-            │
-            ▼
-┌────────────────────────────────────┐
-│   LLM Agent (LiquidAI LFM2-24B)   │
-│   with Tool Calling                │
-│                                    │
-│   Available Tools:                 │
-│   🔧 search_pubmed                │
-│   🔧 lookup_drug_info             │
-│   🔧 search_drugs_for_condition   │
-│   🔧 search_clinical_trials       │
-│   🔧 check_pharmacogenomics       │
-│   🔧 get_population_drug_warnings │
-│   🔧 check_drug_interactions      │
-└─────────────┬──────────────────────┘
-              │ Multi-round tool calling loop
-              ▼
-┌────────────────────────────────────┐
-│   Synthesis & Recommendations      │
-│   - Conditions identified          │
-│   - Research papers cited          │
-│   - Drugs recommended with         │
-│     ethnicity-specific notes       │
-│   - Safety alerts                  │
-└─────────────┬──────────────────────┘
-              ▼
-┌────────────────────────────────────┐
-│   Streamlit Dashboard              │
-│   - Patient profile sidebar        │
-│   - Analysis results               │
-│   - Agent tool trace               │
-│   - Export report                  │
-└────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    React Frontend                        │
+│            (Vite + Tailwind CSS + TypeScript)            │
+│                    Port 5173                             │
+└──────────────────────┬──────────────────────────────────┘
+                       │  /api/* (Vite Proxy)
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                  FastAPI Backend                          │
+│                    Port 8000                              │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │              LLM Agent (Core)                    │    │
+│  │  ┌──────────┐ ┌──────────┐ ┌────────────────┐  │    │
+│  │  │ PubMed   │ │ OpenFDA  │ │ ClinicalTrials │  │    │
+│  │  │ Search   │ │ Drug DB  │ │    .gov        │  │    │
+│  │  └──────────┘ └──────────┘ └────────────────┘  │    │
+│  │  ┌──────────────────┐ ┌─────────────────────┐  │    │
+│  │  │ Pharmacogenomics │ │  Drug Interactions  │  │    │
+│  │  │    (PharmGKB)    │ │                     │  │    │
+│  │  └──────────────────┘ └─────────────────────┘  │    │
+│  └─────────────────────────────────────────────────┘    │
+│                         │                                │
+│                    SQLite DB                              │
+│              (conversations, versions,                    │
+│                  chat messages)                           │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Component | Technology |
-|---|---|
-| **LLM** | LiquidAI/LFM2-24B-A2B-GGUF via HuggingFace Inference Endpoint |
-| **Frontend** | Streamlit |
-| **Backend** | Python (FastAPI-style agent pipeline) |
-| **Research API** | PubMed / NCBI E-utilities (free) |
-| **Drug Data** | OpenFDA API (free) |
-| **Clinical Trials** | ClinicalTrials.gov API v2 (free) |
-| **Pharmacogenomics** | Curated PharmGKB / CPIC knowledge base |
-| **LLM Client** | OpenAI Python SDK (compatible endpoint) |
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19, TypeScript, Vite 7, Tailwind CSS 4, Lucide Icons, React Markdown |
+| **Backend** | Python, FastAPI, Uvicorn, Pydantic |
+| **LLM** | LiquidAI LFM2-24B via HuggingFace Inference API |
+| **Database** | SQLite (file-based, zero config) |
+| **Data Sources** | PubMed (NCBI), OpenFDA, ClinicalTrials.gov, PharmGKB, DrugBank |
 
 ---
 
-## 🚀 Setup & Installation
+## 🔧 Tools & Data Sources
 
-### Prerequisites
-- Python 3.11+
-- pip
-
-### Steps
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/medlens.git
-cd medlens
-
-# 2. Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
-# or: venv\Scripts\activate  # Windows
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Set up environment variables
-cp .env.example .env
-# Edit .env with your HuggingFace API key
-
-# 5. Run the application
-streamlit run app.py
-```
-
-### Environment Variables
-
-Create a `.env` file with:
-```
-HF_API_URL=https://your-hf-endpoint.aws.endpoints.huggingface.cloud/v1
-HF_API_KEY=your_hf_api_key
-HF_MODEL=LiquidAI/LFM2-24B-A2B-GGUF
-MAX_CONTEXT_TOKENS=32000
-```
+| Tool | API | What It Does |
+|------|-----|-------------|
+| **PubMed Search** | NCBI E-utilities | Searches medical literature, returns paper titles, abstracts, PMIDs |
+| **Drug Lookup** | OpenFDA Drug Labels | Fetches drug info — indications, dosage, warnings, contraindications, adverse reactions |
+| **Clinical Trials** | ClinicalTrials.gov v2 | Finds relevant clinical trials by condition, returns status, phases, interventions |
+| **Pharmacogenomics** | PharmGKB | Retrieves gene-drug associations, dosing guidelines by genotype/ethnicity |
+| **Drug Interactions** | DrugBank-style | Checks interactions between medications, severity levels, clinical effects |
 
 ---
 
@@ -132,98 +80,163 @@ MAX_CONTEXT_TOKENS=32000
 
 ```
 medlens/
-├── app.py                          # Streamlit main application
+├── server.py                  # FastAPI backend server (API endpoints, SSE streaming)
+├── app.py                     # Legacy Streamlit interface (alternative UI)
+├── requirements.txt           # Python dependencies
+├── medlens.db                 # SQLite database (auto-created)
+├── .env                       # Environment variables (API keys)
+│
 ├── agent/
-│   ├── core.py                     # Agent loop with tool calling
-│   ├── llm_client.py               # HuggingFace endpoint client
-│   └── prompts.py                  # System prompts
-├── tools/
-│   ├── pubmed_search.py            # PubMed/NCBI API
-│   ├── drug_lookup.py              # OpenFDA drug API
-│   ├── clinical_trials.py          # ClinicalTrials.gov API
-│   ├── pharmacogenomics.py         # PharmGKB/CPIC data
-│   └── drug_interactions.py        # Drug interaction checker
+│   ├── core.py                # Agent orchestration — runs tools, synthesizes reports
+│   ├── prompts.py             # System prompts for LLM (analysis, follow-up, intent classification)
+│   └── llm_client.py          # HuggingFace Inference API client with retry logic
+│
 ├── models/
-│   └── schemas.py                  # Pydantic data models
+│   └── schemas.py             # Pydantic models (PatientProfile, ToolResult, etc.)
+│
+├── tools/
+│   ├── pubmed_search.py       # PubMed/NCBI search tool
+│   ├── drug_lookup.py         # OpenFDA drug label lookup
+│   ├── clinical_trials.py     # ClinicalTrials.gov search
+│   ├── pharmacogenomics.py    # PharmGKB pharmacogenomics data
+│   └── drug_interactions.py   # Drug-drug interaction checker
+│
 ├── utils/
-│   └── helpers.py                  # Token estimation, text processing
-├── .streamlit/
-│   └── config.toml                 # Streamlit theme configuration
-├── requirements.txt
-├── .env
-└── README.md
+│   └── helpers.py             # Token counting, text truncation utilities
+│
+└── frontend/
+    ├── package.json           # Node.js dependencies
+    ├── vite.config.ts         # Vite config (dev server, proxy, Tailwind)
+    ├── index.html             # Entry HTML
+    └── src/
+        ├── App.tsx            # Main React app (chat UI, report panel, themes)
+        ├── main.tsx           # React entry point
+        └── index.css          # Global styles
 ```
 
 ---
 
-## 🧬 Pharmacogenomics Coverage
+## 📋 Prerequisites
 
-MedLens includes curated data for the following pharmacogenomic markers:
-
-| Gene/Marker | Affected Drugs | Clinical Significance |
-|---|---|---|
-| **CYP2D6** | Codeine, tramadol, fluoxetine, metoprolol | Drug metabolism (~25% of common drugs) |
-| **CYP2C19** | Clopidogrel, omeprazole, escitalopram | Antiplatelet efficacy, PPI dosing |
-| **CYP2C9** | Warfarin, NSAIDs, sulfonylureas | Anticoagulant dosing |
-| **VKORC1** | Warfarin | Warfarin sensitivity |
-| **HLA-B*5801** | Allopurinol | Stevens-Johnson syndrome risk |
-| **G6PD** | Primaquine, dapsone, nitrofurantoin | Hemolytic anemia risk |
-
-Population data covers: East Asian, South Asian, African, European/Caucasian, Middle Eastern, Hispanic/Latino.
+- **Python** 3.10+
+- **Node.js** 18+ and npm
+- **HuggingFace API Key** with access to an inference endpoint
 
 ---
 
-## 📊 Evaluation Criteria Alignment
+## ⚙️ Environment Setup
 
-| Criteria | How MedLens Addresses It |
-|---|---|
-| **Originality** | Novel combination of LLM reasoning + pharmacogenomics + real-time medical DB queries |
-| **Technical Complexity** | Multi-round agentic tool calling, 7 integrated APIs, context window management |
-| **Practical Applicability** | Addresses real health equity gap in drug prescription |
-| **User Experience** | Clean dashboard, live agent trace, exportable reports |
-| **Scalability** | Modular tool architecture — easy to add more data sources |
+Create a `.env` file in the project root:
 
----
-
-## ⚠️ Disclaimers
-
-- **This is NOT a medical device.** MedLens is an educational/research tool.
-- **Not for clinical use.** All recommendations must be verified by qualified healthcare professionals.
-- **AI limitations apply.** The LLM may produce inaccurate information. Always cross-reference with authoritative sources.
-- **Pharmacogenomic data is generalized.** Individual genetic testing is required for precise pharmacogenomic guidance.
+```env
+HF_API_URL=https://your-huggingface-endpoint-url
+HF_API_KEY=hf_your_api_key_here
+HF_MODEL=LiquidAI/LFM2-24B-A2B-GGUF
+MAX_CONTEXT_TOKENS=32000
+```
 
 ---
 
-## 🤖 AI Disclosure
+## 🚀 Installation & Running
 
-This project uses:
-- **LiquidAI LFM2-24B-A2B-GGUF** — Large language model for medical reasoning and tool orchestration
-- **AI-generated content** — The clinical analysis and recommendations are AI-generated based on real medical database queries
+### Local Development
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/your-username/medlens.git
+cd medlens
+
+# 2. Set up Python backend
+python -m venv venv
+source venv/bin/activate        # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. Set up frontend
+cd frontend
+npm install
+cd ..
+
+# 4. Start backend (Terminal 1)
+python server.py                # Runs on http://localhost:8000
+
+# 5. Start frontend (Terminal 2)
+cd frontend
+npm run dev                     # Runs on http://localhost:5173
+```
+
+Open **http://localhost:5173** in your browser.
+
+### Remote Server / EC2
+
+```bash
+# 1. Start backend (Terminal 1)
+python server.py                # Listens on 0.0.0.0:8000
+
+# 2. Start frontend (Terminal 2)
+cd frontend
+npm run dev                     # Listens on 0.0.0.0:5173 (configured in vite.config.ts)
+```
+
+The Vite dev server proxies all `/api/*` requests to the backend internally, so you **only need port 5173 open** in your security group/firewall.
+
+Open **http://your-server-ip:5173** from any browser.
 
 ---
 
-## 👥 Team
+## 📡 API Endpoints
 
-- **Aditya Acharya** — Full-stack development, AI/ML engineering
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/conversations` | List all conversations with metadata |
+| `POST` | `/api/conversations` | Create a new conversation |
+| `GET` | `/api/conversations/:id/messages` | Get chat history for a conversation |
+| `GET` | `/api/conversations/:id/versions` | Get document version history |
+| `GET` | `/api/versions/:id` | Get a specific report version (content + patient data) |
+| `DELETE` | `/api/conversations/:id` | Delete a conversation and all data |
+| `POST` | `/api/analyze` | Main analysis endpoint (SSE streaming) |
+
+### `POST /api/analyze` Request Body
+
+```json
+{
+  "prompt": "45yo South Asian male with Type 2 Diabetes on metformin",
+  "conversation_id": "optional-uuid",
+  "patient_data": { "age": 45, "sex": "Male", "ethnicity": "South Asian" },
+  "current_report": "optional - existing report for follow-ups",
+  "is_followup": false
+}
+```
+
+Response is a **Server-Sent Events stream** with `status`, `result`, and `error` events.
+
+---
+
+## 🔄 How It Works
+
+1. **Patient Profile Extraction** — The LLM extracts structured patient demographics (age, sex, ethnicity, medications, allergies) from free-text input
+2. **Parallel Tool Execution** — The agent runs 5 tools concurrently:
+   - Searches PubMed for relevant research
+   - Looks up current medications on OpenFDA
+   - Finds relevant clinical trials
+   - Checks pharmacogenomic considerations for the patient's ethnicity
+   - Verifies drug-drug interactions
+3. **Evidence Synthesis** — The LLM synthesizes all tool results into a structured clinical report with ethnicity-specific considerations
+4. **Follow-up Handling** — On subsequent messages, the agent classifies intent (edit, addition, question, research) and either updates the report or responds conversationally
+5. **Version Control** — Each report update creates a new version; users can browse previous versions
+
+---
+
+## 🎨 Themes
+
+| Theme | Style |
+|-------|-------|
+| **Warm Stone** | Soft warm neutrals with terracotta accent |
+| **Clinical Teal** | Clean medical look with teal highlights |
+| **Therapeutic Sage** | Calming green earth tones |
+| **Midnight** | Dark mode with indigo accent |
 
 ---
 
 ## 📄 License
 
-MIT License — See [LICENSE](LICENSE) for details.
-
----
-
-## 🔮 Future Roadmap
-
-- [ ] Integration with more pharmacogenomic databases (DPWG, FDA PGx)
-- [ ] Patient history tracking across sessions
-- [ ] Multi-language support for global accessibility
-- [ ] FHIR/HL7 integration for EHR systems
-- [ ] Drug dosage calculator based on pharmacogenomic profile
-- [ ] Mobile-responsive PWA version
-- [ ] Expanded ethnic group coverage with more granular data
-
----
-
-*Built with ❤️ for DevDash 2026*
+This project is for educational and research purposes. Not intended for clinical use.

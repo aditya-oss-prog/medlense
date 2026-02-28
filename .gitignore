@@ -7,3 +7,6 @@ __pycache__/
 dist/
 build/
 .streamlit/secrets.toml
+opencode.jsonc
+medlens.db
+test_*.html

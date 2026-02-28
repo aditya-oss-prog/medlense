@@ -6,6 +6,7 @@ from typing import Optional
 
 class PatientProfile(BaseModel):
     """Patient demographic and medical profile."""
+
     symptoms: str = Field(..., description="Natural language symptom description")
     age: int = Field(..., ge=0, le=150, description="Patient age")
     sex: str = Field(..., description="Patient biological sex")
@@ -17,6 +18,7 @@ class PatientProfile(BaseModel):
 
 class Condition(BaseModel):
     """Identified medical condition."""
+
     name: str
     icd_code: str = ""
     probability: str = ""  # High / Medium / Low
@@ -25,6 +27,7 @@ class Condition(BaseModel):
 
 class ResearchPaper(BaseModel):
     """Condensed PubMed research paper."""
+
     title: str
     authors: str = ""
     year: str = ""
@@ -36,6 +39,7 @@ class ResearchPaper(BaseModel):
 
 class DrugRecommendation(BaseModel):
     """Drug recommendation with context."""
+
     drug_name: str
     generic_name: str = ""
     indication: str = ""
@@ -47,6 +51,7 @@ class DrugRecommendation(BaseModel):
 
 class ClinicalTrial(BaseModel):
     """Clinical trial summary."""
+
     title: str
     status: str = ""
     phase: str = ""
@@ -57,6 +62,7 @@ class ClinicalTrial(BaseModel):
 
 class ToolCall(BaseModel):
     """Represents a single tool call from the agent."""
+
     tool_name: str
     arguments: dict = {}
     result: Optional[str] = None
@@ -64,6 +70,7 @@ class ToolCall(BaseModel):
 
 class AgentResult(BaseModel):
     """Complete result from the agent pipeline."""
+
     conditions: list[Condition] = []
     research_papers: list[ResearchPaper] = []
     drug_recommendations: list[DrugRecommendation] = []
@@ -76,3 +83,12 @@ class AgentResult(BaseModel):
         "advice, diagnosis, or treatment. Always consult a qualified healthcare provider "
         "for medical decisions."
     )
+
+
+class DocumentVersion(BaseModel):
+    """Document version metadata."""
+
+    id: int
+    version_number: int
+    user_message: str
+    created_at: str
