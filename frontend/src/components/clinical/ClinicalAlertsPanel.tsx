@@ -100,7 +100,7 @@ export const ClinicalAlertsPanel: React.FC<ClinicalAlertsPanelProps> = ({ alerts
       {/* Alert Cards */}
       <div className="space-y-2">
         {sortedAlerts.map((alert, idx) => {
-          const config = severityConfig[alert.severity];
+          const config = severityConfig[alert.severity] || severityConfig.medium;
           const typeIcon = typeIconConfig[alert.type] || <Info size={14} />;
           
           return (

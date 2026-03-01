@@ -3,7 +3,7 @@
 export type Probability = 'High' | 'Medium' | 'Low';
 export type EvidenceGrade = 'A' | 'B' | 'C' | 'D';
 export type RecommendationStrength = 'Strong' | 'Moderate' | 'Weak';
-export type SeverityLevel = 'Severe' | 'Moderate' | 'Mild' | 'None';
+export type SeverityLevel = 'critical' | 'high' | 'medium' | 'low';
 
 export interface DifferentialDiagnosis {
   id: string;

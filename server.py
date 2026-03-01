@@ -369,7 +369,7 @@ def analyze_case(req: AnalyzeRequest):
                 )
 
                 if response_type == "report_update" and result.get("updated_report"):
-                    # Save new version
+                    # Save new version — report is already merged in core.py
                     patient_dict = (
                         result.get("updated_patient")
                         or current_patient_data
@@ -406,6 +406,7 @@ def analyze_case(req: AnalyzeRequest):
                             "response_type": "report_update",
                             "chat_response": result["chat_response"],
                             "synthesis": result["updated_report"],
+                            "report_changes": result.get("report_changes"),
                             "patient": patient_dict,
                             "conversation_id": conversation_id,
                             "version_number": version_number,
@@ -420,6 +421,7 @@ def analyze_case(req: AnalyzeRequest):
                             "response_type": "chat_only",
                             "chat_response": result["chat_response"],
                             "synthesis": None,
+                            "report_changes": None,
                             "patient": current_patient_data or patient.model_dump(),
                             "conversation_id": conversation_id,
                             "version_number": None,
@@ -503,7 +505,8 @@ def analyze_case(req: AnalyzeRequest):
                         "response_type": "report_update",
                         "chat_response": "I've completed the clinical analysis. See the report on the right.",
                         "synthesis": result.get("structured_report")
-                        or result.get("synthesis", "No synthesis generated."),
+                        or result.get("synthesis")
+                        or "Analysis completed but no structured data generated. The LLM may have returned empty or malformed response.",
                         "patient": patient_dict,
                         "conversation_id": conversation_id,
                         "version_number": version_number,

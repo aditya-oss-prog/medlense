@@ -25,6 +25,8 @@ const probabilityConfig: Record<Probability, { color: string; bg: string }> = {
   Low: { color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
 };
 
+const defaultProbabilityConfig = { color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
+
 const evidenceGradeConfig: Record<EvidenceGrade, { color: string; bg: string; label: string }> = {
   A: { color: '#22c55e', bg: 'rgba(34,197,94,0.15)', label: 'Level A' },
   B: { color: '#3b82f6', bg: 'rgba(59,130,246,0.15)', label: 'Level B' },
@@ -32,10 +34,32 @@ const evidenceGradeConfig: Record<EvidenceGrade, { color: string; bg: string; la
   D: { color: '#ef4444', bg: 'rgba(239,68,68,0.15)', label: 'Level D' },
 };
 
+const defaultEvidenceConfig = { color: '#94a3b8', bg: 'rgba(148,163,184,0.15)', label: 'N/A' };
+
+// Normalize LLM confidence values to expected keys
+function normalizeConfidence(value: string | undefined): Probability {
+  if (!value) return 'Medium';
+  const lower = value.toLowerCase();
+  if (lower === 'high' || lower === 'strong') return 'High';
+  if (lower === 'medium' || lower === 'moderate') return 'Medium';
+  if (lower === 'low' || lower === 'weak') return 'Low';
+  return 'Medium'; // fallback
+}
+
+// Normalize LLM evidence grade values
+function normalizeEvidenceGrade(value: string | undefined): EvidenceGrade {
+  if (!value) return 'C';
+  const upper = value.toUpperCase().charAt(0);
+  if (upper === 'A' || upper === 'B' || upper === 'C' || upper === 'D') return upper as EvidenceGrade;
+  return 'C'; // fallback
+}
+
 export const DrugCard: React.FC<DrugCardProps> = ({ drug, onAddToMedicationList }) => {
   const [expanded, setExpanded] = useState(false);
-  const confidenceConfig = probabilityConfig[drug.confidence];
-  const evidenceConfig = evidenceGradeConfig[drug.evidenceGrade];
+  const normalizedConfidence = normalizeConfidence(drug.confidence);
+  const normalizedGrade = normalizeEvidenceGrade(drug.evidenceGrade);
+  const confidenceConfig = probabilityConfig[normalizedConfidence] || defaultProbabilityConfig;
+  const evidenceConfig = evidenceGradeConfig[normalizedGrade] || defaultEvidenceConfig;
 
   return (
     <div className="border rounded-lg overflow-hidden transition-all hover:shadow-md" style={{

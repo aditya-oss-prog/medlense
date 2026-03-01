@@ -8,10 +8,10 @@ interface DrugInteractionMatrixProps {
 }
 
 const severityConfig: Record<SeverityLevel, { color: string; bg: string; label: string; priority: number }> = {
-  Severe: { color: '#ef4444', bg: 'rgba(239,68,68,0.2)', label: 'Severe', priority: 4 },
-  Moderate: { color: '#f59e0b', bg: 'rgba(245,158,11,0.2)', label: 'Moderate', priority: 3 },
-  Mild: { color: '#3b82f6', bg: 'rgba(59,130,246,0.2)', label: 'Mild', priority: 2 },
-  None: { color: '#22c55e', bg: 'rgba(34,197,94,0.1)', label: 'None', priority: 1 },
+  critical: { color: '#ef4444', bg: 'rgba(239,68,68,0.2)', label: 'Critical', priority: 4 },
+  high: { color: '#f59e0b', bg: 'rgba(245,158,11,0.2)', label: 'High', priority: 3 },
+  medium: { color: '#3b82f6', bg: 'rgba(59,130,246,0.2)', label: 'Medium', priority: 2 },
+  low: { color: '#22c55e', bg: 'rgba(34,197,94,0.1)', label: 'Low', priority: 1 },
 };
 
 export const DrugInteractionMatrix: React.FC<DrugInteractionMatrixProps> = ({ 
@@ -40,16 +40,16 @@ export const DrugInteractionMatrix: React.FC<DrugInteractionMatrixProps> = ({
         </h3>
         <div className="flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: severityConfig.Severe.bg, border: `1px solid ${severityConfig.Severe.color}` }} />
-            <span style={{ color: 'var(--text-muted)' }}>Severe</span>
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: severityConfig.critical.bg, border: `1px solid ${severityConfig.critical.color}` }} />
+            <span style={{ color: 'var(--text-muted)' }}>Critical</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: severityConfig.Moderate.bg, border: `1px solid ${severityConfig.Moderate.color}` }} />
-            <span style={{ color: 'var(--text-muted)' }}>Moderate</span>
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: severityConfig.high.bg, border: `1px solid ${severityConfig.high.color}` }} />
+            <span style={{ color: 'var(--text-muted)' }}>High</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: severityConfig.Mild.bg, border: `1px solid ${severityConfig.Mild.color}` }} />
-            <span style={{ color: 'var(--text-muted)' }}>Mild</span>
+            <div className="w-3 h-3 rounded" style={{ backgroundColor: severityConfig.medium.bg, border: `1px solid ${severityConfig.medium.color}` }} />
+            <span style={{ color: 'var(--text-muted)' }}>Medium</span>
           </div>
         </div>
       </div>
@@ -94,7 +94,7 @@ export const DrugInteractionMatrix: React.FC<DrugInteractionMatrixProps> = ({
                 {medications.map((drug2, colIdx) => {
                   const isDiagonal = rowIdx === colIdx;
                   const interaction = !isDiagonal ? interactionMap.get(`${drug1}||${drug2}`) : null;
-                  const severity = interaction?.severity || 'None';
+                  const severity = interaction?.severity || 'low';
                   const config = severityConfig[severity];
 
                   return (
@@ -118,7 +118,7 @@ export const DrugInteractionMatrix: React.FC<DrugInteractionMatrixProps> = ({
                           </span>
                         </div>
                       ) : (
-                        <Check size={16} style={{ color: severityConfig.None.color, opacity: 0.5 }} />
+                        <Check size={16} style={{ color: severityConfig.low.color, opacity: 0.5 }} />
                       )}
                     </td>
                   );

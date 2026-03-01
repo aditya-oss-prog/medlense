@@ -140,7 +140,7 @@ SCHEMA:
       "id": "inter-1",
       "drug1": "string",
       "drug2": "string",
-      "severity": "Severe|Moderate|Mild|None",
+      "severity": "critical|high|medium|low",
       "mechanism": "string",
       "clinicalEffect": "string",
       "management": "string"
@@ -175,7 +175,61 @@ SCHEMA:
 CRITICAL: Return ONLY the JSON object, nothing else. Ensure all arrays are properly formatted. Use null or empty arrays for sections with no data."""
 
 
-# ─────────────────────── Follow-Up Prompts ───────────────────────
+# ─────────────────────── Unified Follow-Up Prompt ───────────────────────
+
+UNIFIED_FOLLOWUP_PROMPT = """You are MedLens, a clinical decision support AI assistant. The user has an existing clinical analysis and is sending a follow-up message.
+
+CURRENT PATIENT:
+{patient_context}
+
+CURRENT REPORT (structured JSON):
+{current_report}
+
+CONVERSATION HISTORY:
+{chat_history}
+
+YOUR TASK:
+Respond to the user's follow-up message. You have full flexibility in how you respond:
+
+1. **Conversational answer**: If the user is asking a question, wants an explanation, or needs information — answer them directly and helpfully. Use tools if you need to look up specific data (drugs, research, trials, pharmacogenomics, interactions).
+
+2. **Report update**: If the user wants to change the report (add/remove drugs, update patient info, add conditions, etc.) — use tools to research if needed, then provide ONLY the specific sections that changed as a partial JSON update.
+
+3. **Both**: You can answer conversationally AND suggest report changes at the same time.
+
+RESPONSE FORMAT:
+You MUST respond with a JSON object in this exact format:
+
+{{
+  "chat_message": "Your conversational response to the user. Use markdown formatting. This is ALWAYS required — even for report updates, explain what you did.",
+  "report_changes": null | {{...partial report sections...}}
+}}
+
+RULES FOR report_changes:
+- Set to null if no report changes are needed (just a conversational answer)
+- If changes ARE needed, include ONLY the sections that changed — do NOT reproduce unchanged sections
+- Each section must use the same schema keys as the original report
+- For array sections (like drugRecommendations), include the COMPLETE array for that section (with all items, both old and new)
+- Valid section keys: "chiefComplaint", "differentialDiagnosis", "drugRecommendations", "researchEvidence", "pharmacogenomics", "drugInteractions", "alerts", "workupRecommendations", "assessment", "plan", "followUpRecommendations", "complexityLevel"
+
+EXAMPLES:
+
+User: "What are the side effects of metformin?"
+Response: {{"chat_message": "Metformin commonly causes... [detailed answer]", "report_changes": null}}
+
+User: "Add lisinopril 10mg to the recommendations"
+Response: {{"chat_message": "I've added lisinopril 10mg to the drug recommendations...", "report_changes": {{"drugRecommendations": [...all drugs including new one...], "drugInteractions": [...updated interactions...], "alerts": [...updated alerts...]}}}}
+
+User: "Remove the diabetes diagnosis"
+Response: {{"chat_message": "I've removed the diabetes diagnosis...", "report_changes": {{"differentialDiagnosis": [...remaining diagnoses...], "assessment": "Updated assessment..."}}}}
+
+User: "Can you search for more research on SSRIs in South Asian populations?"
+Response: {{"chat_message": "I found several relevant studies... [detailed findings]", "report_changes": {{"researchEvidence": [...updated evidence list...]}}}}
+
+CRITICAL: Return ONLY the JSON object. No markdown code blocks around it. The chat_message field must always be present and non-empty."""
+
+
+# ─────────────────────── Legacy Prompts (kept for backward compat) ──────
 
 FOLLOWUP_CLASSIFY_PROMPT = """You are an intent classifier for a medical decision support system. A user has an existing clinical analysis report and is now sending a follow-up message.
 
@@ -244,4 +298,25 @@ RULES:
 3. If the request involves adding new clinical information, use tools to research it first.
 4. If removing a drug, also update related pharmacogenomic and interaction sections.
 5. If changing patient demographics, note that drug recommendations may need re-evaluation.
-6. Return the FULL report, not just the changed sections."""
+6. Return the FULL report, not just the changed sections.
+
+CRITICAL OUTPUT REQUIREMENT:
+You MUST return the updated report as a valid JSON object matching the exact schema below. Do NOT return markdown, plain text, or explanations — ONLY the JSON object.
+
+JSON SCHEMA STRUCTURE:
+{{
+  "chiefComplaint": "string",
+  "differentialDiagnosis": [{{"id": "dx-1", "condition": "string", "icd10": "string", "probability": "High|Medium|Low", "reasoning": "string"}}],
+  "drugRecommendations": [{{"id": "drug-1", "drugName": "string", "genericName": "string", "indication": "string", "dose": "string", "warnings": ["string"], "contraindications": ["string"], "sideEffects": ["string"], "confidence": "High|Medium|Low", "evidenceGrade": "A|B|C|D"}}],
+  "researchEvidence": [{{"id": "paper-1", "title": "string", "pmid": "string", "journal": "string", "year": 2024, "abstract": "string", "relevance": "High|Medium|Low"}}],
+  "clinicalTrials": [{{"id": "trial-1", "nctId": "string", "title": "string", "status": "string", "phase": "string"}}],
+  "drugInteractions": [{{"id": "inter-1", "drug1": "string", "drug2": "string", "severity": "critical|high|medium|low", "mechanism": "string", "management": "string"}}],
+  "pharmacogenomics": [{{"id": "pgx-1", "gene": "string", "geneName": "string", "drugAffected": "string", "clinicalImplication": "string", "dosingGuidance": "string"}}],
+  "alerts": [{{"id": "alert-1", "type": "warning|contraindication|interaction", "severity": "critical|high|medium|low", "title": "string", "description": "string", "recommendation": "string"}}],
+  "workupRecommendations": [{{"id": "workup-1", "category": "lab|imaging|procedure", "test": "string", "indication": "string", "priority": "urgent|routine|optional"}}],
+  "assessment": "string - overall clinical summary",
+  "plan": ["string - action items"],
+  "followUpRecommendations": ["string"]
+}}
+
+Output ONLY the JSON object, nothing else. No markdown code blocks, no explanations."""

@@ -20,8 +20,16 @@ def chat_completion(
     tools: list[dict] | None = None,
     temperature: float = 0.1,
     max_tokens: int = 4096,
+    json_mode: bool = False,
 ) -> dict:
     """Send a chat completion request to the LLM.
+    
+    Args:
+        messages: Chat messages
+        tools: Optional tool definitions
+        temperature: Sampling temperature
+        max_tokens: Max output tokens
+        json_mode: If True, constrain output to valid JSON via response_format
     
     Returns the raw response dict with 'content' and optionally 'tool_calls'.
     """
@@ -39,6 +47,11 @@ def chat_completion(
         "top_k": 50,
         "repetition_penalty": 1.05
     }
+
+    # JSON mode: constrain output to valid JSON (supported by most OpenAI-compatible APIs)
+    if json_mode and not tools:
+        kwargs["response_format"] = {"type": "json_object"}
+
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"

@@ -7,6 +7,8 @@ import type { PatientSummary, StructuredClinicalReport } from './types/clinical'
 type Message = {
   role: 'user' | 'assistant';
   content: string;
+  type?: 'chat_only' | 'report_update' | 'initial_analysis' | 'error';
+  intent?: string;
 };
 
 type PatientData = {
@@ -116,8 +118,37 @@ function generateId(): string {
 
 // Parse structured JSON report from LLM
 function parseStructuredReport(data: any, patientData: PatientData): StructuredClinicalReport {
+  // Helper to normalize severity values
+  const normalizeSeverity = (severity: string): 'critical' | 'high' | 'medium' | 'low' => {
+    if (!severity) return 'low';
+    const lower = severity.toLowerCase();
+    if (lower === 'severe' || lower === 'critical') return 'critical';
+    if (lower === 'moderate' || lower === 'high') return 'high';
+    if (lower === 'mild' || lower === 'medium') return 'medium';
+    if (lower === 'none' || lower === 'low') return 'low';
+    return 'low'; // Default fallback
+  };
+
+  // Normalize confidence/probability: LLM may return "Moderate" instead of "Medium"
+  const normalizeProbability = (value: string): 'High' | 'Medium' | 'Low' => {
+    if (!value) return 'Medium';
+    const lower = value.toLowerCase();
+    if (lower === 'high' || lower === 'strong') return 'High';
+    if (lower === 'medium' || lower === 'moderate') return 'Medium';
+    if (lower === 'low' || lower === 'weak') return 'Low';
+    return 'Medium';
+  };
+
+  // Normalize evidence grade: LLM may return "B+" or "Level B"
+  const normalizeEvidenceGrade = (value: string): 'A' | 'B' | 'C' | 'D' => {
+    if (!value) return 'C';
+    const upper = value.toUpperCase().charAt(0);
+    if (upper === 'A' || upper === 'B' || upper === 'C' || upper === 'D') return upper as 'A' | 'B' | 'C' | 'D';
+    return 'C';
+  };
+
   if (!data || typeof data !== 'object') {
-    // Fallback for markdown responses
+    // Fallback for markdown responses or failed parsing
     return {
       id: generateId(),
       createdAt: new Date().toISOString(),
@@ -132,10 +163,64 @@ function parseStructuredReport(data: any, patientData: PatientData): StructuredC
       alerts: [],
       workupRecommendations: [],
       guidelineReferences: [],
-      assessment: data || 'Clinical analysis generated.',
-      plan: ['Review clinical findings'],
+      assessment: typeof data === 'string' && data.length > 0 ? data : 'Clinical analysis generated but structured data parsing failed. Please check the raw response or retry with more detailed patient information.',
+      plan: ['Review clinical findings', 'Consider retrying analysis'],
       followUpRecommendations: [],
       complexityLevel: 'moderate'
+    };
+  }
+  
+  // Normalize alert severities
+  const normalizedAlerts = (data.alerts || []).map((alert: any) => ({
+    ...alert,
+    severity: normalizeSeverity(alert.severity)
+  }));
+
+  // Normalize drug interaction severities  
+  const normalizedInteractions = (data.drugInteractions || []).map((interaction: any) => ({
+    ...interaction,
+    severity: normalizeSeverity(interaction.severity)
+  }));
+
+  // Normalize drug recommendation confidence/evidenceGrade (LLM returns "Moderate" instead of "Medium", etc.)
+  const normalizedDrugs = (data.drugRecommendations || []).map((drug: any) => ({
+    ...drug,
+    confidence: normalizeProbability(drug.confidence),
+    evidenceGrade: normalizeEvidenceGrade(drug.evidenceGrade),
+  }));
+
+  // Normalize differential diagnosis probability
+  const normalizedDiagnoses = (data.differentialDiagnosis || []).map((dx: any) => ({
+    ...dx,
+    probability: normalizeProbability(dx.probability),
+  }));
+  
+  // Validate that we have at least some meaningful data
+  const hasMeaningfulData = 
+    (data.differentialDiagnosis && data.differentialDiagnosis.length > 0) ||
+    (data.drugRecommendations && data.drugRecommendations.length > 0) ||
+    (data.assessment && data.assessment.length > 10);
+  
+  if (!hasMeaningfulData) {
+    // Return report with warning in assessment
+    return {
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      chiefComplaint: data.chiefComplaint || 'Patient presentation',
+      differentialDiagnosis: normalizedDiagnoses,
+      drugRecommendations: normalizedDrugs,
+      researchEvidence: data.researchEvidence || [],
+      clinicalTrials: data.clinicalTrials || [],
+      drugInteractions: normalizedInteractions,
+      pharmacogenomics: data.pharmacogenomics || [],
+      alerts: normalizedAlerts,
+      workupRecommendations: data.workupRecommendations || [],
+      guidelineReferences: data.guidelineReferences || [],
+      assessment: 'Analysis completed but returned minimal structured data. The LLM may have encountered issues processing the patient case. Raw response: ' + (data.assessment || 'No assessment text'),
+      plan: data.plan || ['Review raw response', 'Consider retrying with more detailed symptoms'],
+      followUpRecommendations: data.followUpRecommendations || [],
+      complexityLevel: data.complexityLevel || 'moderate'
     };
   }
   
@@ -145,13 +230,13 @@ function parseStructuredReport(data: any, patientData: PatientData): StructuredC
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     chiefComplaint: data.chiefComplaint || '',
-    differentialDiagnosis: data.differentialDiagnosis || [],
-    drugRecommendations: data.drugRecommendations || [],
+    differentialDiagnosis: normalizedDiagnoses,
+    drugRecommendations: normalizedDrugs,
     researchEvidence: data.researchEvidence || [],
     clinicalTrials: data.clinicalTrials || [],
-    drugInteractions: data.drugInteractions || [],
+    drugInteractions: normalizedInteractions,
     pharmacogenomics: data.pharmacogenomics || [],
-    alerts: data.alerts || [],
+    alerts: normalizedAlerts,
     workupRecommendations: data.workupRecommendations || [],
     guidelineReferences: data.guidelineReferences || [],
     assessment: data.assessment || '',
@@ -280,22 +365,40 @@ export default function App() {
   };
 
   const stopAnalysis = () => {
+    console.log('[stopAnalysis] Called');
     if (eventSource) {
       eventSource.close();
       setEventSource(null);
     }
     setLoading(false);
     setStatusUpdates([]);
+    console.log('[stopAnalysis] Loading reset to false');
   };
 
   const submitCase = async (note: string) => {
-    if (!note.trim() || loading) return;
+    console.log('[submitCase] Called with note:', note);
+    console.log('[submitCase] loading state:', loading);
+    console.log('[submitCase] conversationId:', conversationId);
+    console.log('[submitCase] has report:', !!report);
+    console.log('[submitCase] has patient:', !!patient);
+
+    if (!note.trim()) {
+      console.error('[submitCase] Empty note - returning early');
+      return;
+    }
+    if (loading) {
+      console.error('[submitCase] Already loading - returning early');
+      return;
+    }
 
     setLoading(true);
     setStatusUpdates([]);
 
     const isNewConversation = !conversationId;
     const convId = conversationId || await createConversation();
+    
+    console.log('[submitCase] Using conversation ID:', convId);
+    console.log('[submitCase] Is new conversation:', isNewConversation);
     
     if (isNewConversation) {
       setConversationId(convId);
@@ -307,35 +410,68 @@ export default function App() {
     setMessages(prev => [...prev, userMessage]);
 
     try {
+      console.log('[submitCase] Making API request to:', `${API_BASE}/analyze`);
+      
+      // Send full report JSON for follow-ups so backend can merge changes properly
+      let currentReportJson: string | undefined = undefined;
+      if (report) {
+        try {
+          // Serialize the full structured report (minus UI-only fields)
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id: _id, createdAt: _ca, updatedAt: _ua, ...reportData } = report;
+          currentReportJson = JSON.stringify(reportData);
+        } catch {
+          currentReportJson = report.assessment || undefined;
+        }
+      }
+
+      const requestBody = {
+        prompt: note,
+        conversation_id: convId,
+        patient_data: patient ? {
+          age: patient.age,
+          sex: patient.sex,
+          ethnicity: patient.ethnicity,
+          country: patient.country,
+          allergies: patient.allergies,
+          current_medications: patient.currentMedications
+        } : undefined,
+        current_report: currentReportJson,
+        is_followup: !!report
+      };
+      
+      console.log('[submitCase] Request body:', JSON.stringify(requestBody, null, 2));
+      
       const response = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: note,
-          conversation_id: convId,
-          patient_data: patient ? {
-            age: patient.age,
-            sex: patient.sex,
-            ethnicity: patient.ethnicity,
-            country: patient.country,
-            allergies: patient.allergies,
-            current_medications: patient.currentMedications
-          } : undefined,
-          current_report: report?.assessment || undefined,
-          is_followup: !!report
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) throw new Error('Analysis failed');
-      if (!response.body) throw new Error('No response body');
+      console.log('[submitCase] Response status:', response.status, response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[submitCase] API error response:', errorText);
+        throw new Error(`Analysis failed: ${response.status} ${response.statusText}`);
+      }
+      if (!response.body) {
+        console.error('[submitCase] No response body');
+        throw new Error('No response body');
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
+      console.log('[submitCase] Starting SSE stream reader');
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.log('[submitCase] SSE stream completed');
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -345,40 +481,104 @@ export default function App() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
+              console.log('[submitCase] Received SSE data:', data.type, data);
               
-              if (data.type === 'status') {
-                setStatusUpdates(prev => [...prev, data.message]);
-              } else if (data.type === 'result') {
-                // Process result
-                if (data.synthesis) {
-                  const structuredReport = parseStructuredReport(data.synthesis, data.patient || {});
-                  setReport(structuredReport);
-                  setPatient(convertToPatientSummary(data.patient || {}));
+                if (data.type === 'status') {
+                  setStatusUpdates(prev => [...prev, data.message]);
+                } else if (data.type === 'result') {
+                  console.log('[submitCase] Processing result - response_type:', data.response_type, 'has synthesis:', !!data.synthesis, 'has chat_response:', !!data.chat_response);
+                  
+                  // Check response_type to determine handling
+                  if (data.response_type === 'report_update' && data.synthesis) {
+                    // Explicit report modification - parse JSON and update structured report
+                    console.log('[submitCase] Report update detected - parsing structured JSON');
+                    try {
+                      const parsed = typeof data.synthesis === 'string' ? JSON.parse(data.synthesis) : data.synthesis;
+                      const structuredReport = parseStructuredReport(parsed, data.patient || {});
+                      
+                      // Validate that parsed report is not completely empty
+                      // (Relaxed: a follow-up may only update one section like drugRecommendations
+                      //  while others stay empty — that's fine, merge preserved them)
+                      const hasAnyContent = 
+                        structuredReport.differentialDiagnosis.length > 0 ||
+                        structuredReport.drugRecommendations.length > 0 ||
+                        (structuredReport.assessment && structuredReport.assessment.length > 10) ||
+                        structuredReport.researchEvidence.length > 0 ||
+                        structuredReport.pharmacogenomics.length > 0 ||
+                        structuredReport.alerts.length > 0 ||
+                        structuredReport.plan.length > 0;
+                      
+                      if (!hasAnyContent) {
+                        console.error('[submitCase] Report update returned completely empty - JSON may be malformed');
+                        throw new Error('Report update returned no structured data at all');
+                      }
+                      
+                      setReport(structuredReport);
+                      setPatient(convertToPatientSummary(data.patient || {}));
+                      console.log('[submitCase] Report updated successfully from report_update response');
+                    } catch (parseError: any) {
+                      console.error('[submitCase] Failed to parse report update JSON:', parseError);
+                      console.error('[submitCase] Raw synthesis:', data.synthesis?.substring(0, 500));
+                      // Add error message to chat instead of breaking
+                      setMessages(prev => [...prev, { 
+                        role: 'assistant', 
+                        content: `⚠️ **Report Update Failed**: I encountered an error parsing the updated report structure. The response wasn't valid JSON or was missing required fields. Please try again with more specific instructions.\n\nTechnical details: ${parseError.message}`,
+                        type: 'error'
+                      }]);
+                    }
+                  } else if (data.response_type === 'chat_only' || !data.synthesis || data.synthesis === '') {
+                    // Chat-only response - preserve existing report, only add to conversation
+                    console.log('[submitCase] Chat-only response - preserving existing report');
+                    if (data.patient && !report) {
+                      // Only set patient if no report exists yet (first message scenario)
+                      setPatient(convertToPatientSummary(data.patient));
+                    }
+                  } else if (data.synthesis !== null && data.synthesis !== undefined && data.synthesis !== '') {
+                    // Initial analysis or new patient - always update report
+                    console.log('[submitCase] Initial analysis - updating report');
+                    const structuredReport = parseStructuredReport(data.synthesis, data.patient || {});
+                    setReport(structuredReport);
+                    setPatient(convertToPatientSummary(data.patient || {}));
+                  }
+                  
+                  if (data.chat_response) {
+                    const messageType = data.response_type === 'report_update' ? 'report_update' : 
+                                       !report && data.synthesis ? 'initial_analysis' : 'chat_only';
+                    setMessages(prev => [...prev, { 
+                      role: 'assistant', 
+                      content: data.chat_response,
+                      type: messageType,
+                      intent: data.intent
+                    }]);
+                  }
+                } else if (data.type === 'error') {
+                  console.error('[submitCase] SSE error:', data.message);
+                  throw new Error(data.message);
                 }
-                
-                if (data.chat_response) {
-                  setMessages(prev => [...prev, { role: 'assistant', content: data.chat_response }]);
-                }
-              } else if (data.type === 'error') {
-                throw new Error(data.message);
-              }
             } catch (e) {
-              console.error('Error parsing SSE data:', e);
+              console.error('[submitCase] Error parsing SSE data:', e);
             }
           }
         }
       }
 
+      console.log('[submitCase] SSE processing complete, reloading conversations');
       // Reload conversations to get updated list
       loadConversations();
 
     } catch (err: any) {
-      console.error('Analysis error:', err);
+      console.error('[submitCase] Analysis error:', err);
+      console.error('[submitCase] Error details:', {
+        message: err.message,
+        name: err.name,
+        stack: err.stack
+      });
       setMessages(prev => [...prev, { 
         role: 'assistant', 
         content: `Analysis failed: ${err.message}` 
       }]);
     } finally {
+      console.log('[submitCase] Finally block - resetting state');
       setLoading(false);
       setStatusUpdates([]);
       setCurrentNote('');

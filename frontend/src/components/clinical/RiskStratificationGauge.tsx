@@ -79,25 +79,31 @@ export const RiskStratificationGauge: React.FC<RiskStratificationGaugeProps> = (
             </div>
           </div>
 
-          {/* Center - Gauge Arc */}
-          <div className="flex-1 mx-8">
-            <div className="relative h-24">
-              {/* Background arc */}
-              <div className="absolute inset-0 rounded-full" style={{ 
-                backgroundColor: 'rgba(0,0,0,0.1)',
-                border: '8px solid var(--border-subtle)',
-                borderRadius: '50%',
-                clipPath: 'polygon(0 50%, 100 50%, 100 100%, 0 100%)'
-              }} />
-              
-              {/* Colored arc */}
-              <div className="absolute inset-0 rounded-full" style={{ 
-                backgroundColor: config.color,
-                borderRadius: '50%',
-                clipPath: `polygon(0 50%, ${config.percentage}% 50%, ${config.percentage}% 100%, 0 100%)`,
-                opacity: 0.8
-              }} />
-            </div>
+          {/* Center - Gauge Arc (Full Circle) */}
+          <div className="flex-1 mx-8 flex justify-center">
+            <svg viewBox="0 0 100 100" className="h-28 w-28">
+              {/* Background circle */}
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                fill="none"
+                stroke="var(--border-subtle)"
+                strokeWidth="8"
+              />
+              {/* Colored arc - proportional to risk level */}
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                fill="none"
+                stroke={config.color}
+                strokeWidth="8"
+                strokeDasharray={`${config.percentage * 2.51} 251`}
+                strokeLinecap="round"
+                transform="rotate(-90 50 50)"
+              />
+            </svg>
           </div>
 
           {/* Right - Metrics */}

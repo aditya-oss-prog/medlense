@@ -7,7 +7,9 @@ from typing import Optional, List, Dict, Any
 class PatientProfile(BaseModel):
     """Patient demographic and medical profile."""
 
-    symptoms: str = Field(..., description="Natural language symptom description")
+    symptoms: Optional[str] = Field(
+        default="", description="Natural language symptom description"
+    )
     age: int = Field(..., ge=0, le=150, description="Patient age")
     sex: str = Field(..., description="Patient biological sex")
     ethnicity: str = Field(..., description="Patient ethnicity/race")
